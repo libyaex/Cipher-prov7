@@ -224,6 +224,7 @@ export default function WalletAutoTab({
       setConfirmResetTop(false);
       setConfirmResetSettings(false);
       if (json.ok) {
+        engine.applyServerBotSettings(undefined, json.wallet?.balanceUsdt);
         onToast(
           archiveHistory
             ? `تمت إعادة ضبط المحاكاة وأرشفة السجل السابق (${(json.wallet?.initialBalanceUsdt ?? 10000).toFixed(0)} USDT) ✔`
@@ -258,7 +259,8 @@ export default function WalletAutoTab({
       const json = await res.json();
       if (json.ok) {
         setCapitalDraft('');
-        onToast(`تم ضبط رأس المال الافتراضي إلى ${val.toFixed(2)} USDT دون المساس بالسجل ✔`, 'info');
+        engine.applyServerBotSettings(undefined, json.wallet?.balanceUsdt);
+        onToast(`تم ضبط رصيد المحفظة إلى ${(json.wallet?.balanceUsdt ?? val).toFixed(2)} USDT مع الحفاظ على السجل ✔`, 'info');
         await onRefresh();
       } else {
         onToast(json.error || 'تعذر تحديث رأس المال', 'bad');

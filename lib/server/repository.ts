@@ -609,11 +609,14 @@ export const repo = {
     const cleanCap = Math.max(10, Math.min(100_000_000, Number(newCapitalUsdt) || 10000));
     const current = await this.getWallet(userId);
     const oldInitial = current.initialBalanceUsdt || 10000;
-    const capitalDelta = +(cleanCap - oldInitial).toFixed(6);
-    // Keep historical realized PnL delta intact if user is adjusting capital baseline cleanly,
-    // or ensure available free balance stays non-negative relative to locked margin.
-    const nextBalance = Math.max(0, +(cleanCap + current.realizedPnlUsdt).toFixed(6));
+    const oldBalance = current.balanceUsdt ?? oldInitial;
+    const capitalDelta = +(cleanCap - oldBalance).toFixed(6);
+    // Set active wallet balance cleanly to the chosen capital (preserving any locked margin on live positions)
+    // and reset session PnL/fee/funding/daily counters so daily loss limits & equity match the new capital
+    // without deleting or archiving closed trade history.
+    const nextBalance = Math.max(current.lockedMarginUsdt || 0, +cleanCap.toFixed(6));
     const nowIso = new Date().toISOString();
+    const today = nowIso.slice(0, 10);
     const idem = `setcap:${userId}:${cleanCap}:${Date.now()}`;
 
     const sb = getSupabaseAdmin();
@@ -625,6 +628,11 @@ export const repo = {
             user_id: userId,
             balance_usdt: nextBalance,
             initial_balance_usdt: cleanCap,
+            realized_pnl_usdt: 0,
+            total_fees_usdt: 0,
+            total_funding_usdt: 0,
+            daily_pnl_usdt: 0,
+            daily_reset_date: today,
             updated_at: nowIso,
           },
           { onConflict: 'user_id' }
@@ -637,7 +645,7 @@ export const repo = {
         position_id: null,
         amount_usdt: capitalDelta,
         balance_after_usdt: nextBalance,
-        note: `تعديل رأس المال الافتراضي من ${oldInitial.toFixed(2)}$ إلى ${cleanCap.toFixed(2)}$ (مع الحفاظ على سجل الصفقات)`,
+        note: `ضبط رصيد المحفظة من ${oldBalance.toFixed(2)}$ إلى ${nextBalance.toFixed(2)}$ (رأس المال ${cleanCap.toFixed(2)}$، مع الحفاظ على سجل الصفقات)`,
       });
     }
 
@@ -645,6 +653,11 @@ export const repo = {
     const w = await this.getWallet(userId);
     w.initialBalanceUsdt = cleanCap;
     w.balanceUsdt = nextBalance;
+    w.realizedPnlUsdt = 0;
+    w.totalFeesUsdt = 0;
+    w.totalFundingUsdt = 0;
+    w.dailyPnlUsdt = 0;
+    w.dailyResetDate = today;
     w.updatedAt = nowIso;
     store.wallets[userId] = w;
     store.ledger.unshift({
@@ -656,7 +669,7 @@ export const repo = {
       positionId: null,
       amountUsdt: capitalDelta,
       balanceAfterUsdt: nextBalance,
-      note: `تعديل رأس المال الافتراضي من ${oldInitial.toFixed(2)}$ إلى ${cleanCap.toFixed(2)}$ (مع الحفاظ على سجل الصفقات)`,
+      note: `ضبط رصيد المحفظة من ${oldBalance.toFixed(2)}$ إلى ${nextBalance.toFixed(2)}$ (رأس المال ${cleanCap.toFixed(2)}$، مع الحفاظ على سجل الصفقات)`,
       createdAt: nowIso,
     });
     saveLocalStore(store);

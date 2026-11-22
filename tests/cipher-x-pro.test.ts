@@ -755,6 +755,26 @@ describe('CIPHER X PRO — 20-Scenario Verification Suite', () => {
     const updated = await repo.setInitialCapital(uid, 25000);
     expect(updated.initialBalanceUsdt).toBe(25000);
     expect(updated.balanceUsdt).toBe(25000);
+
+    // Simulate prior session realized & daily PnL then adjust capital down to 10 USDT
+    await repo.applyWalletOp({
+      userId: uid,
+      idempotencyKey: `pnl-sim-${uid}`,
+      opType: 'SIM_PNL',
+      balanceDelta: 66.67,
+      marginDelta: 0,
+      realizedDelta: 66.67,
+      dailyDelta: -352.7,
+      feeDelta: 110.35,
+      fundingDelta: -3.14,
+      note: 'Prior PnL',
+    });
+    const updated10 = await repo.setInitialCapital(uid, 10);
+    expect(updated10.initialBalanceUsdt).toBe(10);
+    expect(updated10.balanceUsdt).toBe(10);
+    expect(updated10.realizedPnlUsdt).toBe(0);
+    expect(updated10.dailyPnlUsdt).toBe(0);
+
     const tradesAfter = await repo.getTrades(uid);
     expect(tradesAfter.length).toBe(1);
     expect(tradesAfter[0].id).toBe(`closed-${uid}`);
